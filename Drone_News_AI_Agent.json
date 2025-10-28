@@ -1,0 +1,244 @@
+{
+  "name": "Drone_News_AI_Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "=https://newsapi.org/v2/everything?q=drone+technology+india&pageSize=3&sortBy=publishedAt&apiKey=\n92420180f7ec4c609b29a68b77f1a88e",
+        "options": {}
+      },
+      "id": "0d162978-1318-42fb-9aa0-fe904c3e2b7d",
+      "name": "Fetch Drone News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        160,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        304,
+        256
+      ],
+      "id": "09330223-c354-469e-9a3a-d3fd94174589",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "crzHH9tnOqzOw8Q8",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -64,
+        48
+      ],
+      "id": "3ec8815b-838b-4999-b033-50756b49549d",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://api.linkedin.com/v2/userinfo",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        48
+      ],
+      "id": "e968fb5c-6cbc-41b3-9186-17e90e0a2eb6",
+      "name": "Fetch account",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "byWLA0pRksYo8xEJ",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linkedin.com/v2/ugcPosts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"author\": \"urn:li:person:{{ $json.sub }}\",\n  \"lifecycleState\": \"PUBLISHED\",\n  \"specificContent\": {\n    \"com.linkedin.ugc.ShareContent\": {\n      \"shareCommentary\": {\n        \"text\": \"{{ $('Clean Post Content').item.json.output }}\"\n      },\n      \"shareMediaCategory\": \"NONE\"\n    }\n  },\n  \"visibility\": {\n    \"com.linkedin.ugc.MemberNetworkVisibility\": \"PUBLIC\"\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1136,
+        48
+      ],
+      "id": "aa3013b4-b6bf-48b6-8a90-c4e53aef5b1d",
+      "name": "Create Post",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "byWLA0pRksYo8xEJ",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  const post = item.json?.output || \"\";\n\n  // Fix JSON errors by escaping newlines and quotes\n  const safePost = post\n    .replace(/\\\\/g, \"\\\\\\\\\")\n    .replace(/\\n/g, \"\\\\n\")\n    .replace(/\"/g, '\\\\\"');\n\n  item.json.output = safePost;\n\n  return item;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        48
+      ],
+      "id": "8a53ccbe-067f-455d-b9c8-c7a097a562a7",
+      "name": "Clean Post Content"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      status: \"✅ Post posted successfully\"\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        48
+      ],
+      "id": "6f9a38e2-5e60-48c9-acff-20ac466933d1",
+      "name": "Conformation of Post"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.articles }}",
+        "options": {
+          "systemMessage": "=### 🧠 Prompt for Multi-Article Summarization\n\nYou are an **AI News Summarization Assistant**.\nYou will receive multiple news articles as input.\nRead **each of the first three articles** carefully and produce structured summaries for each one **separately**.\n\n---\n\n### 📰 Output Format (for each article)\n\nArticle {number}:\nTitle: (keep the same as the original)\nSummary :\n* (2–4 key points capturing main ideas)\nHashtags: (3–5 relevant tags like #Technology #AI #Business)\nSource Link: (include the article link)\n\n---\n\n### 🧩 Instructions\n\n1. Summarize **only the first three articles** in the provided input.\n2. Keep each summary **concise but informative** (50–80 words).\n3. Write in **neutral and professional** tone.\n4. Maintain the exact output format for consistency.\n\n---\n\n### Example Output\n\nArticle 1:\nTitle: \"AI Startups Raise Record Funding in 2025\"\nSummary Points:\n\n* AI sector attracts $12B funding globally in Q3 2025.\n* Growth led by enterprise automation and generative AI startups.\n* Investors shift focus from consumer AI to infrastructure tools.\n  Hashtags: #AI #Startups #Funding #TechNews\n  Source Link: [https://example.com/article1](https://example.com/article1)\n\nArticle 2:\nTitle: \"India Launches New Drone Policy 2025\"\nSummary Points:\n\n* New policy promotes drone deliveries and agriculture use.\n* Introduces subsidy schemes for local drone startups.\n* Targets 500,000 skilled drone pilots by 2027.\n  Hashtags: #Drones #Policy #India #Innovation\n  Source Link: [https://example.com/article2](https://example.com/article2)\n\nArticle 3:\nTitle: \"SpaceX Achieves Reusable Rocket Milestone\"\nSummary Points:\n\n* Falcon 9 reused 25 times successfully.\n* Reduces cost per launch by 60%.\n* NASA praises progress in sustainable space tech.\n  Hashtags: #SpaceX #Innovation #SpaceTech #NASA\n  Source Link: [https://example.com/article3](https://example.com/article3)\n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        368,
+        48
+      ],
+      "id": "252cbdd9-9760-4fa3-bc74-5d9f0977ae3b",
+      "name": "Summarization"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Fetch Drone News": {
+      "main": [
+        [
+          {
+            "node": "Summarization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Summarization",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Drone News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch account": {
+      "main": [
+        [
+          {
+            "node": "Create Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Post": {
+      "main": [
+        [
+          {
+            "node": "Conformation of Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Post Content": {
+      "main": [
+        [
+          {
+            "node": "Fetch account",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarization": {
+      "main": [
+        [
+          {
+            "node": "Clean Post Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1d887b69-71c1-4ad2-a92c-98be4f84412f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "41ca5bdb89a7e209ff89d2e904a149b7ec4b393deb146d497264eeda279d2b79"
+  },
+  "id": "N04mN8piJ7zVhYwm",
+  "tags": []
+}
